@@ -20,6 +20,7 @@ import (
 	"github.com/emersion/go-webdav/caldav"
 
 	"github.com/Georgy-Garnov/agendling/internal/ics"
+	"github.com/Georgy-Garnov/agendling/internal/icsfeed"
 	"github.com/Georgy-Garnov/agendling/internal/model"
 	"github.com/Georgy-Garnov/agendling/internal/recur"
 	"github.com/Georgy-Garnov/agendling/internal/storage"
@@ -85,7 +86,7 @@ func (e *Engine) Restart() {
 		return
 	}
 	for _, src := range sources {
-		if src.Type != model.SourceCalDAV || !src.Enabled {
+		if (src.Type != model.SourceCalDAV && src.Type != model.SourceICS) || !src.Enabled {
 			continue
 		}
 		ch := make(chan struct{}, 1)
@@ -103,7 +104,7 @@ func (e *Engine) Stop() {
 	}
 }
 
-// SyncNow requests an immediate sync of all enabled CalDAV sources.
+// SyncNow requests an immediate sync of all enabled remote sources.
 func (e *Engine) SyncNow() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -146,6 +147,21 @@ func (e *Engine) worker(ctx context.Context, id int64, intervalMin int, trigger 
 		}
 		e.runOnce(ctx, id)
 	}
+}
+
+// syncICS downloads one read-only iCalendar feed and replaces its cached events.
+// An invalid/unreachable feed never destroys the last successful local copy.
+func (e *Engine) syncICS(ctx context.Context, src *model.CalendarSource) {
+	e.onStatus(Status{SourceID: src.ID, Running: true})
+	added, err := icsfeed.Sync(ctx, e.store, src)
+	if ctx.Err() != nil {
+		return
+	}
+	_ = e.store.SetSyncStatus(src.ID, "", time.Now(), err)
+	if err != nil {
+		log.Printf("ICS sync %q: %v", src.Name, err)
+	}
+	e.onStatus(Status{SourceID: src.ID, Err: err, NewEvents: added})
 }
 
 // accountKey groups sources that talk to the same server account; rate limits apply per account.
@@ -199,7 +215,11 @@ func (e *Engine) succeeded(acct string) {
 
 func (e *Engine) runOnce(ctx context.Context, id int64) {
 	src, err := e.store.Source(id)
-	if err != nil || !src.Enabled || src.Type != model.SourceCalDAV {
+	if err != nil || !src.Enabled || (src.Type != model.SourceCalDAV && src.Type != model.SourceICS) {
+		return
+	}
+	if src.Type == model.SourceICS {
+		e.syncICS(ctx, src)
 		return
 	}
 	acct := accountKey(src)

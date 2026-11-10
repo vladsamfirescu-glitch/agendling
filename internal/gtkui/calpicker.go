@@ -166,6 +166,8 @@ func calendarOwner(c core.Calendar) string {
 		return c.Account
 	case c.Source.IsLocal():
 		return "Local calendar"
+	case c.Source.IsICS():
+		return "ICS subscription"
 	}
 	return "CalDAV account"
 }

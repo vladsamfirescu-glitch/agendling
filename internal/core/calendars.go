@@ -72,7 +72,7 @@ func collectionKey(id int64, coll string) string { return sourceKey(id) + ":" + 
 // eventKey is the Key of the calendar an event belongs to; a CalDAV event not stored on the
 // server yet belongs to its account's write calendar.
 func eventKey(e *model.Event, src *model.CalendarSource) string {
-	if src == nil || src.IsLocal() {
+	if src == nil || src.IsLocal() || src.IsICS() {
 		return sourceKey(e.CalendarID)
 	}
 	coll := ""
@@ -93,7 +93,7 @@ func (s *Service) calendarsOf(src *model.CalendarSource, hidden map[string]bool)
 		return []Calendar{{Source: src, Collection: coll, Name: src.Name, Key: key,
 			Shown: !hidden[key] && !hidden[sourceKey(src.ID)]}}
 	}
-	if src.IsLocal() {
+	if src.IsLocal() || src.IsICS() {
 		return one("", sourceKey(src.ID))
 	}
 	unsubscribed := map[string]bool{}
@@ -205,6 +205,9 @@ func (s *Service) EditableCalendars(e *model.Event) ([]Calendar, int) {
 	var cals []Calendar
 	idx, current := -1, ""
 	for _, src := range srcs {
+		if src.IsICS() { // subscribed events cannot be edited or used as a destination
+			continue
+		}
 		if src.ID == e.CalendarID {
 			current = eventKey(e, src)
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/Georgy-Garnov/agendling/internal/appinfo"
 	"github.com/Georgy-Garnov/agendling/internal/caldav"
 	"github.com/Georgy-Garnov/agendling/internal/core"
+	"github.com/Georgy-Garnov/agendling/internal/icsfeed"
 	"github.com/Georgy-Garnov/agendling/internal/model"
 )
 
@@ -37,6 +38,7 @@ func formRow(card walk.Container, text string) *walk.Composite {
 // editSource edits a calendar account or local calendar; it returns true when saved.
 func (a *App) editSource(owner walk.Form, src *model.CalendarSource) bool {
 	isCalDAV := src.Type == model.SourceCalDAV
+	isICS := src.IsICS()
 	dlg, err := walk.NewDialog(owner)
 	if err != nil {
 		log.Printf("source dialog: %v", err)
@@ -44,6 +46,8 @@ func (a *App) editSource(owner walk.Form, src *model.CalendarSource) bool {
 	}
 	if isCalDAV {
 		dlg.SetTitle("CalDAV account")
+	} else if isICS {
+		dlg.SetTitle("ICS subscription")
 	} else {
 		dlg.SetTitle("Local calendar")
 	}
@@ -130,6 +134,9 @@ func (a *App) editSource(owner walk.Form, src *model.CalendarSource) bool {
 		s.Name = strings.TrimSpace(name.Text())
 		s.Color = FormatColor(ParseColor(colorEd.Text()))
 		s.Enabled = enabled.Checked()
+		if isICS {
+			s.URL = strings.TrimSpace(urlEdit.Text())
+		}
 		if isCalDAV {
 			s.URL = strings.TrimSpace(urlEdit.Text())
 			s.Username = strings.TrimSpace(user.Text())
@@ -148,7 +155,20 @@ func (a *App) editSource(owner walk.Form, src *model.CalendarSource) bool {
 				s.HiddenCollections = nil // the listed calendars belong to the previous account
 			}
 		}
+		if isICS || isCalDAV {
+			if i := interval.CurrentIndex(); i >= 0 {
+				s.SyncInterval = core.SyncIntervals[i].Mins
+			}
+		}
 		return &s
+	}
+
+	if isICS {
+		feed := formCard(body)
+		urlEdit, _ = walk.NewLineEdit(formRow(feed, "Subscription URL"))
+		urlEdit.SetText(src.URL)
+		urlEdit.SetCueBanner("https://example.com/calendar.ics")
+		caption(formRow(feed, ""), "Paste a live .ics / webcal subscription link. Read-only; updates automatically.")
 	}
 
 	if isCalDAV {
@@ -251,6 +271,22 @@ func (a *App) editSource(owner walk.Form, src *model.CalendarSource) bool {
 		}
 	}
 
+	if isICS {
+		syncCard := formCard(body)
+		interval, _ = walk.NewComboBox(formRow(syncCard, "Refresh"))
+		labels := make([]string, len(core.SyncIntervals))
+		idx := 2
+		for i, it := range core.SyncIntervals {
+			labels[i] = it.Label
+			if it.Mins == src.SyncInterval {
+				idx = i
+			}
+		}
+		interval.SetModel(labels)
+		interval.SetCurrentIndex(idx)
+		interval.SetMinMaxSize(walk.Size{Width: 220}, walk.Size{Width: 220})
+	}
+
 	// Bottom bar.
 	sep, _ := walk.NewComposite(dlg)
 	sep.SetBackground(solid(flLine))
@@ -263,6 +299,12 @@ func (a *App) editSource(owner walk.Form, src *model.CalendarSource) bool {
 		if s.Name == "" {
 			walk.MsgBox(dlg, appinfo.Name, "Please enter a name.", walk.MsgBoxIconWarning)
 			return
+		}
+		if isICS {
+			if _, err := icsfeed.NormalizeURL(s.URL); err != nil {
+				walk.MsgBox(dlg, appinfo.Name, err.Error(), walk.MsgBoxIconWarning)
+				return
+			}
 		}
 		if isCalDAV && (s.URL == "" || s.Username == "") {
 			walk.MsgBox(dlg, appinfo.Name, "Server URL and username are required.", walk.MsgBoxIconWarning)

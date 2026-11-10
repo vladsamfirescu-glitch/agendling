@@ -368,6 +368,9 @@ func (s *settingsUI) buildCalendars() {
 	newFlatButton(actions, glyphAdd, "Add CalDAV account", btnGhost, flWindow, func() {
 		s.editSource(&model.CalendarSource{Type: model.SourceCalDAV, Enabled: true, SyncInterval: 15, Color: "#0b8043"})
 	})
+	newFlatButton(actions, glyphAdd, "Add ICS subscription", btnGhost, flWindow, func() {
+		s.editSource(&model.CalendarSource{Type: model.SourceICS, Enabled: true, SyncInterval: 15, Color: "#ff8c00"})
+	})
 	newFlatButton(actions, glyphAdd, "Add local calendar", btnGhost, flWindow, func() {
 		s.editSource(&model.CalendarSource{Type: model.SourceLocal, Enabled: true, Color: "#8e24aa"})
 	})
@@ -426,7 +429,9 @@ func (s *settingsUI) reloadAccounts() {
 		walk.NewHSpacer(text) // the text column takes the free width
 		label(text, src.Name, uiFont(10, true), flText)
 		info := "Local calendar"
-		if !src.IsLocal() {
+		if src.IsICS() {
+			info = "ICS feed · " + core.SourceStatus(src)
+		} else if !src.IsLocal() {
 			info = "CalDAV"
 			if n := len(caldav.KnownCalendars(a.store, src.ID)); n > 1 {
 				info += fmt.Sprintf(" · %d calendars", n)

@@ -33,6 +33,10 @@ func (a *App) editOccurrence(occ model.Occurrence) {
 		a.view.Reload()
 		return
 	}
+	if src, err := a.store.Source(e.CalendarID); err == nil && src.IsICS() {
+		walk.MsgBox(a.mw, "Subscribed event (read-only)", core.ReadOnlyEventDetails(e, occ.Start), walk.MsgBoxIconInformation)
+		return
+	}
 	a.editEvent(e, occ.Start)
 }
 

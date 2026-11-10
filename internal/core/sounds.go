@@ -54,6 +54,8 @@ func (s *Service) SoundTargets() []SoundTarget {
 		switch {
 		case src.IsLocal():
 			t.Detail = "Local calendar"
+		case src.IsICS():
+			t.Detail = "ICS subscription (read-only)"
 		case len(cals) > 1:
 			t.Detail = fmt.Sprintf("CalDAV account · %d calendars", len(cals))
 		}

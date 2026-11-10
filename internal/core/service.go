@@ -139,6 +139,18 @@ func (s *Service) ApplyEdit(e *model.Event, in EditorInput) error {
 	if in.Calendar == nil {
 		return errors.New("choose a calendar")
 	}
+	if in.Calendar.Source.IsICS() {
+		return errors.New("ICS subscriptions are read-only")
+	}
+	if e.ID != 0 {
+		old, err := s.Store.Source(e.CalendarID)
+		if err != nil {
+			return err
+		}
+		if old.IsICS() {
+			return errors.New("ICS subscriptions are read-only")
+		}
+	}
 	var start, end time.Time
 	if in.AllDay {
 		start = DayStart(in.StartDate)
@@ -193,6 +205,18 @@ func (s *Service) ApplyEdit(e *model.Event, in EditorInput) error {
 // SaveEvent persists an event into cal, moving it between calendars if needed, and queues a push.
 func (s *Service) SaveEvent(e *model.Event, oldCalID int64, cal Calendar) error {
 	src := cal.Source
+	if src.IsICS() {
+		return errors.New("ICS subscriptions are read-only")
+	}
+	if e.ID != 0 {
+		old, err := s.Store.Source(oldCalID)
+		if err != nil {
+			return err
+		}
+		if old.IsICS() {
+			return errors.New("ICS subscriptions are read-only")
+		}
+	}
 	// Where a CalDAV event that is not on the server yet will be created.
 	targetHref := func(uid string) string {
 		if src.IsLocal() || cal.Collection == "" {
@@ -270,6 +294,9 @@ func (s *Service) RemoveSeries(calID int64, uid string) error {
 	if err != nil {
 		return err
 	}
+	if cal.IsICS() {
+		return errors.New("ICS subscriptions are read-only")
+	}
 	if cal.IsLocal() {
 		return s.Store.PurgeUID(calID, uid)
 	}
@@ -296,6 +323,9 @@ func (s *Service) DeleteOccurrence(e *model.Event, occStart time.Time) error {
 	cal, err := s.Store.Source(e.CalendarID)
 	if err != nil {
 		return err
+	}
+	if cal.IsICS() {
+		return errors.New("ICS subscriptions are read-only")
 	}
 	var master *model.Event
 	for _, ev := range series {

@@ -15,6 +15,7 @@ import (
 	"github.com/Georgy-Garnov/agendling/internal/appinfo"
 	"github.com/Georgy-Garnov/agendling/internal/caldav"
 	"github.com/Georgy-Garnov/agendling/internal/core"
+	"github.com/Georgy-Garnov/agendling/internal/icsfeed"
 	"github.com/Georgy-Garnov/agendling/internal/model"
 	"github.com/Georgy-Garnov/agendling/internal/update"
 )
@@ -149,7 +150,9 @@ func (a *App) showSettingsAt(page string) {
 			text, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
 			text.PackStart(markupLabel("<b>"+glib.MarkupEscapeText(src.Name)+"</b>"), false, false, 0)
 			info := "Local calendar"
-			if !src.IsLocal() {
+			if src.IsICS() {
+				info = "ICS feed · " + core.SourceStatus(src)
+			} else if !src.IsLocal() {
 				info = "CalDAV"
 				if n := len(caldav.KnownCalendars(a.store, src.ID)); n > 1 {
 					info += fmt.Sprintf(" · %d calendars", n)
@@ -186,6 +189,9 @@ func (a *App) showSettingsAt(page string) {
 	btns, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
 	btns.PackStart(flat("list-add-symbolic", "Add CalDAV account", func() {
 		edit(&model.CalendarSource{Type: model.SourceCalDAV, Enabled: true, SyncInterval: 15, Color: "#0b8043"})
+	}), false, false, 0)
+	btns.PackStart(flat("list-add-symbolic", "Add ICS subscription", func() {
+		edit(&model.CalendarSource{Type: model.SourceICS, Enabled: true, SyncInterval: 15, Color: "#ff8c00"})
 	}), false, false, 0)
 	btns.PackStart(flat("list-add-symbolic", "Add local calendar", func() {
 		edit(&model.CalendarSource{Type: model.SourceLocal, Enabled: true, Color: "#8e24aa"})
@@ -588,6 +594,21 @@ func (a *App) showSettingsAt(page string) {
 	split, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	split.PackStart(nav, false, false, 0)
 	split.PackStart(stack, true, true, 0)
+	if isICS {
+		_, addSync := card()
+		interval, _ = gtk.ComboBoxTextNew()
+		idx := 2
+		for i, it := range core.SyncIntervals {
+			interval.AppendText(it.Label)
+			if it.Mins == src.SyncInterval {
+				idx = i
+			}
+		}
+		interval.SetActive(idx)
+		interval.SetHAlign(gtk.ALIGN_START)
+		addSync("Refresh", interval)
+	}
+
 	content, _ := dlg.GetContentArea()
 	content.PackStart(split, true, true, 0)
 
@@ -704,6 +725,7 @@ func updateMarkup(rel update.Release, err error) string {
 // editSource shows the calendar account dialog; it returns true when saved.
 func (a *App) editSource(parent gtk.IWindow, src *model.CalendarSource) bool {
 	isCalDAV := src.Type == model.SourceCalDAV
+	isICS := src.IsICS()
 	dlg, _ := gtk.DialogNew()
 	dlg.SetTransientFor(parent)
 	dlg.SetModal(true)
@@ -711,6 +733,8 @@ func (a *App) editSource(parent gtk.IWindow, src *model.CalendarSource) bool {
 	addClass(dlg, "settings-dialog")
 	if isCalDAV {
 		dlg.SetTitle("CalDAV account")
+	} else if isICS {
+		dlg.SetTitle("ICS subscription")
 	} else {
 		dlg.SetTitle("Local calendar")
 	}
@@ -825,6 +849,9 @@ func (a *App) editSource(parent gtk.IWindow, src *model.CalendarSource) bool {
 		rgba := colorBtn.GetRGBA()
 		s.Color = core.RGB{R: uint8(rgba.GetRed()*255 + 0.5), G: uint8(rgba.GetGreen()*255 + 0.5), B: uint8(rgba.GetBlue()*255 + 0.5)}.Hex()
 		s.Enabled = enabled.GetActive()
+		if isICS {
+			s.URL = strings.TrimSpace(entryText(urlE))
+		}
 		if isCalDAV {
 			s.URL = strings.TrimSpace(entryText(urlE))
 			s.Username = strings.TrimSpace(entryText(user))
@@ -843,7 +870,22 @@ func (a *App) editSource(parent gtk.IWindow, src *model.CalendarSource) bool {
 				s.HiddenCollections = nil // the listed calendars belong to the previous account
 			}
 		}
+		if isICS || isCalDAV {
+			if i := interval.GetActive(); i >= 0 {
+				s.SyncInterval = core.SyncIntervals[i].Mins
+			}
+		}
 		return &s
+	}
+
+	if isICS {
+		_, addFeed := card()
+		urlE, _ = gtk.EntryNew()
+		urlE.SetText(src.URL)
+		urlE.SetPlaceholderText("https://example.com/calendar.ics")
+		urlE.SetHExpand(true)
+		addFeed("Subscription URL", urlE)
+		addFeed("", captionLabel("Paste a live ICS / webcal link. Read-only; updates automatically."))
 	}
 
 	if isCalDAV {
@@ -964,6 +1006,12 @@ func (a *App) editSource(parent gtk.IWindow, src *model.CalendarSource) bool {
 		if s.Name == "" {
 			a.message(dlg, gtk.MESSAGE_WARNING, "Please enter a name.")
 			continue
+		}
+		if isICS {
+			if _, err := icsfeed.NormalizeURL(s.URL); err != nil {
+				a.message(dlg, gtk.MESSAGE_WARNING, err.Error())
+				continue
+			}
 		}
 		if isCalDAV && (s.URL == "" || s.Username == "") {
 			a.message(dlg, gtk.MESSAGE_WARNING, "Server URL and username are required.")

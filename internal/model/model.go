@@ -11,9 +11,10 @@ type SourceType string
 const (
 	SourceLocal  SourceType = "local"
 	SourceCalDAV SourceType = "caldav"
+	SourceICS    SourceType = "ics" // read-only subscribed iCalendar feed
 )
 
-// CalendarSource is either a local-only calendar or a remote CalDAV account/collection.
+// CalendarSource is a local calendar, a remote CalDAV account, or a read-only ICS feed.
 type CalendarSource struct {
 	ID           int64
 	Name         string
@@ -38,6 +39,7 @@ type CalendarSource struct {
 }
 
 func (s *CalendarSource) IsLocal() bool { return s.Type == SourceLocal }
+func (s *CalendarSource) IsICS() bool   { return s.Type == SourceICS }
 
 // ReminderOffset is how long before the event start a reminder fires.
 type ReminderOffset time.Duration

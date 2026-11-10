@@ -31,6 +31,10 @@ func (a *App) editOccurrence(occ model.Occurrence) {
 		a.view.reload()
 		return
 	}
+	if src, err := a.store.Source(e.CalendarID); err == nil && src.IsICS() {
+		a.message(a.win, gtk.MESSAGE_INFO, core.ReadOnlyEventDetails(e, occ.Start))
+		return
+	}
 	a.editEvent(e, occ.Start)
 }
 

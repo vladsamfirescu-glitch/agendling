@@ -18,7 +18,7 @@ type SettingsPage struct {
 // SettingsPages lists the Settings dialog sections in display order.
 var SettingsPages = []SettingsPage{
 	{Key: "calendars", Title: "Calendars", Icon: "x-office-calendar-symbolic",
-		Intro:    "CalDAV accounts and local calendars, and which of their calendars to sync.",
+		Intro:    "CalDAV accounts, live ICS subscriptions and local calendars.",
 		Keywords: "account caldav server url username password app-specific icloud apple nextcloud fastmail radicale local add edit remove delete sync now color colour interval status"},
 	{Key: "reminders", Title: "Reminders", Icon: "alarm-symbolic",
 		Intro:    "When Agendling reminds you of upcoming events.",
