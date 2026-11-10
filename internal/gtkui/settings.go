@@ -594,20 +594,6 @@ func (a *App) showSettingsAt(page string) {
 	split, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	split.PackStart(nav, false, false, 0)
 	split.PackStart(stack, true, true, 0)
-	if isICS {
-		_, addSync := card()
-		interval, _ = gtk.ComboBoxTextNew()
-		idx := 2
-		for i, it := range core.SyncIntervals {
-			interval.AppendText(it.Label)
-			if it.Mins == src.SyncInterval {
-				idx = i
-			}
-		}
-		interval.SetActive(idx)
-		interval.SetHAlign(gtk.ALIGN_START)
-		addSync("Refresh", interval)
-	}
 
 	content, _ := dlg.GetContentArea()
 	content.PackStart(split, true, true, 0)
@@ -857,9 +843,6 @@ func (a *App) editSource(parent gtk.IWindow, src *model.CalendarSource) bool {
 			s.Username = strings.TrimSpace(entryText(user))
 			s.Password = entryText(pass)
 			s.TrustedCert = trusted
-			if i := interval.GetActive(); i >= 0 {
-				s.SyncInterval = core.SyncIntervals[i].Mins
-			}
 			if s.URL != src.URL {
 				s.CalendarPath = "" // re-discover for a different server
 			}
@@ -886,6 +869,21 @@ func (a *App) editSource(parent gtk.IWindow, src *model.CalendarSource) bool {
 		urlE.SetHExpand(true)
 		addFeed("Subscription URL", urlE)
 		addFeed("", captionLabel("Paste a live ICS / webcal link. Read-only; updates automatically."))
+	}
+
+	if isICS {
+		_, addSync := card()
+		interval, _ = gtk.ComboBoxTextNew()
+		idx := 2
+		for i, it := range core.SyncIntervals {
+			interval.AppendText(it.Label)
+			if it.Mins == src.SyncInterval {
+				idx = i
+			}
+		}
+		interval.SetActive(idx)
+		interval.SetHAlign(gtk.ALIGN_START)
+		addSync("Refresh", interval)
 	}
 
 	if isCalDAV {
